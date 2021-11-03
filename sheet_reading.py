@@ -1,5 +1,4 @@
 import json
-import string
 
 import openpyxl
 
@@ -10,7 +9,10 @@ from_column_number = None
 condition_column_number = None
 save_name_column_number = None
 text_column_number = None
+condition_var_column_number = None
 choices_column_numbers = []
+
+choices = []
 
 checked_condition_columns = []
 
@@ -78,7 +80,7 @@ def get_sheet_cell_detail(row, column):
 #     return choice_type_node
 
 
-def get_last_node_detail(mark_as_completed):
+def get_last_node_detail(mark_as_completed, sheet_name):
     last_node_detail = {
         'uuid': 'bf14925f-11e4-4c8d-ab4f-f8c05737d600',
         'actions': [], 'exits': []
@@ -86,8 +88,8 @@ def get_last_node_detail(mark_as_completed):
 
     last_action_detail = {
         'uuid': 'c65213c0-6c0f-409a-9993-264ef5625f38',
-        'type': 'set_contact_field', 'field': {'key': 'example_story2__completed',
-                                               'name': 'example_story2__completed'}, 'value': 'true'
+        'type': 'set_contact_field', 'field': {'key': f'{sheet_name}__completed',
+                                               'name': f'{sheet_name}__completed'}, 'value': 'true'
     }
 
     last_exit_detail = {
@@ -107,7 +109,10 @@ def get_last_node_detail(mark_as_completed):
 
 def get_required_column_numbers(sheet_name):
     global type_column_number, from_column_number, condition_column_number, \
-        text_column_number, save_name_column_number, choices_column_numbers
+        text_column_number, save_name_column_number, choices_column_numbers, condition_var_column_number
+
+    choices_column_numbers = []
+    condition_var_column_number = []
 
     read_sheet_detail(sheet_name)
 
@@ -120,6 +125,8 @@ def get_required_column_numbers(sheet_name):
             from_column_number = column
         elif first_row == 'condition':
             condition_column_number = column
+        elif first_row == 'condition_var':
+            condition_var_column_number = column
         elif first_row == 'message_text':
             text_column_number = column
         elif first_row == 'save_name':
@@ -131,15 +138,18 @@ def get_required_column_numbers(sheet_name):
 
 
 def get_condition_node_detail(row, condition_values, save_name):
-    global save_name_column_number
+    global save_name_column_number, condition_var_column_number
 
     condition_node_detail = {
         'uuid': 'a117eea3-8f9e-4023-aacb-404360b88c25',
         'actions': [], 'router': {'type': 'switch', 'cases': [],
-        'categories': [{'exit_uuid': 'e59fda75-21e1-4d77-83a7-7733cc721eff',
-        'name': 'All Responses', 'uuid': '5348fd6e-ffd3-4f11-ad59-3aa6f985a51a'}],
-        'operand': '@input.text', 'default_category_uuid': '5348fd6e-ffd3-4f11-ad59-3aa6f985a51a',
-        'wait': {'type': 'msg'}}, 'exits': [{'uuid': 'e59fda75-21e1-4d77-83a7-7733cc721eff', 'destination_uuid': None}],
+                                  'categories': [{'exit_uuid': 'e59fda75-21e1-4d77-83a7-7733cc721eff',
+                                                  'name': 'All Responses',
+                                                  'uuid': '5348fd6e-ffd3-4f11-ad59-3aa6f985a51a'}],
+                                  'operand': '@input.text',
+                                  'default_category_uuid': '5348fd6e-ffd3-4f11-ad59-3aa6f985a51a',
+                                  'wait': {'type': 'msg'}},
+        'exits': [{'uuid': 'e59fda75-21e1-4d77-83a7-7733cc721eff', 'destination_uuid': None}],
     }
 
     exits_detail = {
@@ -161,30 +171,48 @@ def get_condition_node_detail(row, condition_values, save_name):
                 'type': 'has_only_phrase', 'uuid': '6f5a56ce-265e-4986-9107-f48e15bf7c98'
             }
 
-            categories_detail['name'] = condition_text
-
-            if condition_text == 'Unticked Value' or 'No':
-                cases_detail = {
+            if condition_text == 'Unticked Value' or condition_text == 'No':
+                case_detail = {
                     'arguments': [], 'category_uuid': '7fa98857-490b-4f56-958b-0ba45b26f9d4',
                     'type': 'has_only_phrase', 'uuid': '6f5a56ce-265e-4986-9107-f48e15bf7c98'
                 }
 
-                if condition_text == 'Unticked Value':
-                    cases_detail['arguments'].append('Unticked Value')
-                    condition_node_detail['router']['cases'].append(cases_detail)
-                else:
-                    cases_detail['arguments'].append('No')
-                    condition_node_detail['router']['cases'].append(cases_detail)
+                categorie_detail = {
+                    'exit_uuid': 'e59fda75-21e1-4d77-83a7-7733cc721eff',
+                    'name': '', 'uuid': '5348fd6e-ffd3-4f11-ad59-3aa6f985a51a'
+                }
 
-            cases_detail['arguments'].append(condition_text)
+                exit_detail = {
+                    'uuid': 'e59fda75-21e1-4d77-83a7-7733cc721eff',
+                    'destination_uuid': '65355f1a-f702-48c3-a015-1774112607e5',
+                }
 
-            condition_node_detail['router']['cases'].append(cases_detail)
-            condition_node_detail['router']['categories'].append(categories_detail)
-            condition_node_detail['exits'].append(exits_detail)
+                case_detail['arguments'].append(condition_text)
+                categorie_detail['name'] = condition_text
 
-        if get_sheet_cell_detail(row, save_name_column_number):
-            condition_node_detail['router'].pop('wait', None)
-            condition_node_detail['router']['operand'] = f'@fields.{get_sheet_cell_detail(row, save_name_column_number)}'
+                condition_node_detail['router']['cases'].append(case_detail)
+                condition_node_detail['router']['categories'].append(categorie_detail)
+                condition_node_detail['exits'].append(exit_detail)
+
+            if condition_text:
+                categories_detail['name'] = condition_text
+                cases_detail['arguments'].append(condition_text)
+
+                condition_node_detail['router']['cases'].append(cases_detail)
+                condition_node_detail['router']['categories'].append(categories_detail)
+                condition_node_detail['exits'].append(exits_detail)
+
+        if save_name_column_number:
+            if get_sheet_cell_detail(row, save_name_column_number):
+                condition_node_detail['router'].pop('wait', None)
+                condition_node_detail['router'][
+                    'operand'] = f'@fields.{get_sheet_cell_detail(row, save_name_column_number)}'
+
+        if condition_var_column_number:
+            if get_sheet_cell_detail(row=row, column=condition_var_column_number):
+                condition_node_detail['router'].pop('wait', None)
+                condition_node_detail['router']['operand'] = get_sheet_cell_detail(row=row,
+                                                                               column=condition_var_column_number)
 
     return condition_node_detail
 
@@ -200,8 +228,8 @@ def get_condition_values(row):
 
     while True:
         if from_column_value == get_sheet_cell_detail(row + increment_row, from_column_number):
-            checked_condition_columns.append(row+increment_row)
-            condition_column_values.append(get_sheet_cell_detail(row+increment_row, condition_column_number))
+            checked_condition_columns.append(row + increment_row)
+            condition_column_values.append(get_sheet_cell_detail(row + increment_row, condition_column_number))
             increment_row = increment_row + 1
 
         elif get_sheet_cell_detail(row + increment_row, type_column_number) == 'mark_as_completed':
@@ -214,6 +242,8 @@ def get_condition_values(row):
 
 def get_message_text_node_detail(row):
     global choices_column_numbers
+    global choices
+
     choices = []
 
     message_text_node_detail = {
@@ -240,6 +270,8 @@ def get_message_text_node_detail(row):
 
     for choice_text in choices:
         message_text_action_detail['quick_replies'].append(choice_text)
+
+    # if choices and not get_sheet_cell_detail(row=row+1, column=2):
 
     message_text_node_detail['actions'].append(message_text_action_detail)
     message_text_node_detail['exits'].append(message_text_exist_detail)
@@ -271,33 +303,38 @@ def get_all_nodes_detail(flows_detail, sheet_name):
     global type_column_number, from_column_number, condition_column_number, \
         text_column_number, save_name_column_number, choices_column_numbers
     global checked_condition_columns
+    global choices
 
     checked_condition_columns = []
     get_required_column_numbers(sheet_name)
 
-    for row in range(2, get_maximum_rows()+1):
+    for row in range(2, get_maximum_rows() + 1):
         if not get_sheet_cell_detail(row, 2):
             break
 
-        if get_sheet_cell_detail(row, condition_column_number) and row not in checked_condition_columns:
-            checked_condition_columns.append(row)
-            flows_detail['nodes'].append(get_condition_node_detail(row, get_condition_values(row), None))
+        if get_sheet_cell_detail(row, type_column_number) == 'mark_as_completed':
+            flows_detail['nodes'].append(get_last_node_detail(True, sheet_name))
+        else:
+            if get_sheet_cell_detail(row, condition_column_number) and row not in checked_condition_columns:
+                checked_condition_columns.append(row)
+                flows_detail['nodes'].append(get_condition_node_detail(row, get_condition_values(row), None))
 
-        if get_sheet_cell_detail(row, text_column_number):
-            if not get_sheet_cell_detail(row, type_column_number) == 'save_value':
-                flows_detail['nodes'].append(get_message_text_node_detail(row))
+            if get_sheet_cell_detail(row, text_column_number) and get_sheet_cell_detail(row, text_column_number) != 2:
+                if not get_sheet_cell_detail(row, type_column_number) == 'save_value':
+                    flows_detail['nodes'].append(get_message_text_node_detail(row))
 
-        if get_sheet_cell_detail(row, save_name_column_number):
-            save_name_column_value = get_sheet_cell_detail(row, save_name_column_number)
+                if choices and get_sheet_cell_detail(row=row + 1, column=2) is None:
+                    flows_detail['nodes'].append(get_condition_node_detail(row, choices, None))
 
-            if not get_sheet_cell_detail(row, type_column_number) == 'save_value':
-                flows_detail['nodes'].append(get_condition_node_detail(row, [], save_name_column_value))
-                flows_detail['nodes'].append(get_save_name_node_detail(save_name_column_value, row))
-            else:
-                flows_detail['nodes'].append(get_save_name_node_detail(save_name_column_value, row))
+            if save_name_column_number:
+                if get_sheet_cell_detail(row, save_name_column_number):
+                    save_name_column_value = get_sheet_cell_detail(row, save_name_column_number)
 
-        # if get_sheet_cell_detail(row, type_column_number) == 'mark_as_completed':
-        #     flows_detail['nodes'].append(get_last_node_detail(True))
+                    if not get_sheet_cell_detail(row, type_column_number) == 'save_value':
+                        flows_detail['nodes'].append(get_condition_node_detail(row, [], save_name_column_value))
+                        flows_detail['nodes'].append(get_save_name_node_detail(save_name_column_value, row))
+                    else:
+                        flows_detail['nodes'].append(get_save_name_node_detail(save_name_column_value, row))
 
 
 def get_detail_in_flows(sheet_name):
@@ -308,15 +345,18 @@ def get_detail_in_flows(sheet_name):
         'metadata': {'revision': 0}, 'localization': {}
     }
 
-    flows_detail['nodes'].append(get_all_nodes_detail(flows_detail, sheet_name))
-    flows_detail['nodes'].append(get_last_node_detail(False))
+    if get_all_nodes_detail(flows_detail, sheet_name):
+        flows_detail['nodes'].append(get_all_nodes_detail(flows_detail, sheet_name))
+
+    flows_detail['nodes'].append(get_last_node_detail(False, sheet_name))
 
     return flows_detail
 
 
 if __name__ == '__main__':
-    # sheets = ['example_story1', 'example_story2', 'example_mark_as_completed', 'example_characters']
-    sheets = ['example_tickbox']
+    sheets = ['example_habit', 'example_characters', 'example_mark_as_completed',
+              'example_story2', 'example_story1', 'example_user_input', 'example_variables',
+              'example_tickbox_2', 'example_tickbox', 'example_long_xxxxxxxxxxxxxxxx']
 
     for sheet_name in sheets:
         complete_sheet_detail = {
