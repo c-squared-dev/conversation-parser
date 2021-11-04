@@ -1,8 +1,11 @@
 import json
+import uuid
 
 import openpyxl
 
 sheet = None
+
+destination_uuid = []
 
 type_column_number = None
 from_column_number = None
@@ -38,62 +41,24 @@ def get_sheet_cell_detail(row, column):
     return sheet.cell(row=row, column=column).value
 
 
-# def get_choice_node_detail(row):
-#     global choices_column_numbers
-#
-#     choice_type_node = {
-#         'uuid': 'a117eea3-8f9e-4023-aacb-404360b88c25',
-#         'actions': [], 'router': {'type': 'switch', 'cases': [],
-#                                   'categories': [{'exit_uuid': 'e59fda75-21e1-4d77-83a7-7733cc721eff',
-#                                                   'name': 'All Responses',
-#                                                   'uuid': '5348fd6e-ffd3-4f11-ad59-3aa6f985a51a'}],
-#                                   'operand': '@input.text',
-#                                   'default_category_uuid': '5348fd6e-ffd3-4f11-ad59-3aa6f985a51a',
-#                                   'wait': {'type': 'msg'}},
-#         'exits': [{'uuid': 'e59fda75-21e1-4d77-83a7-7733cc721eff', 'destination_uuid': None}],
-#     }
-#
-#     for choice_index in choices_column_numbers:
-#         if get_sheet_cell_detail(row, choice_index):
-#             current_categories_detail = {
-#                 'exit_uuid': 'e59fda75-21e1-4d77-83a7-7733cc721eff',
-#                 'name': '', 'uuid': '5348fd6e-ffd3-4f11-ad59-3aa6f985a51a'
-#             }
-#             current_exist_detail = {
-#                 'uuid': 'e59fda75-21e1-4d77-83a7-7733cc721eff', 'destination_uuid': None
-#             }
-#             current_choice_detail = {
-#                 'arguments': [], 'category_uuid': 'd44a1630-8d47-4dda-8aa4-8bd63e3f88e5',
-#                 'type': 'has_only_phrase', 'uuid': '2b0705fb-de25-4de6-ab96-ab098480c9ca',
-#             }
-#
-#             choice_name = get_sheet_cell_detail(row, choice_index)
-#
-#             current_categories_detail['name'] = choice_name
-#             current_exist_detail['destination_uuid'] = 'f79d8ec3-cc2a-4278-a1f2-9d4cd0163c48'
-#             current_choice_detail['arguments'].append(choice_name)
-#
-#             choice_type_node['router']['categories'].append(current_categories_detail)
-#             choice_type_node['exits'].append(current_exist_detail)
-#             choice_type_node['router']['cases'].append(current_choice_detail)
-#
-#     return choice_type_node
+def generate_uuid():
+    return str(uuid.uuid4())
 
 
 def get_last_node_detail(mark_as_completed, sheet_name):
     last_node_detail = {
-        'uuid': 'bf14925f-11e4-4c8d-ab4f-f8c05737d600',
+        'uuid': generate_uuid(),
         'actions': [], 'exits': []
     }
 
     last_action_detail = {
-        'uuid': 'c65213c0-6c0f-409a-9993-264ef5625f38',
+        'uuid': generate_uuid(),
         'type': 'set_contact_field', 'field': {'key': f'{sheet_name}__completed',
                                                'name': f'{sheet_name}__completed'}, 'value': 'true'
     }
 
     last_exit_detail = {
-        'uuid': '0367ab86-a4a3-4116-88dd-10d36a17f829', 'destination_uuid': None
+        'uuid': generate_uuid(), 'destination_uuid': None
     }
 
     if mark_as_completed:
@@ -139,47 +104,56 @@ def get_required_column_numbers(sheet_name):
 
 def get_condition_node_detail(row, condition_values, save_name):
     global save_name_column_number, condition_var_column_number
+    global destination_uuid
 
     condition_node_detail = {
-        'uuid': 'a117eea3-8f9e-4023-aacb-404360b88c25',
+        'uuid': destination_uuid[-1] if destination_uuid else generate_uuid(),
         'actions': [], 'router': {'type': 'switch', 'cases': [],
-                                  'categories': [{'exit_uuid': 'e59fda75-21e1-4d77-83a7-7733cc721eff',
+                                  'categories': [{'exit_uuid': generate_uuid(),
                                                   'name': 'All Responses',
-                                                  'uuid': '5348fd6e-ffd3-4f11-ad59-3aa6f985a51a'}],
+                                                  'uuid': generate_uuid()}],
                                   'operand': '@input.text',
-                                  'default_category_uuid': '5348fd6e-ffd3-4f11-ad59-3aa6f985a51a',
+                                  'default_category_uuid': '',
                                   'wait': {'type': 'msg'}},
         'exits': [{'uuid': 'e59fda75-21e1-4d77-83a7-7733cc721eff', 'destination_uuid': None}],
     }
 
-    exits_detail = {
-        'uuid': 'e59fda75-21e1-4d77-83a7-7733cc721eff',
-        'destination_uuid': '65355f1a-f702-48c3-a015-1774112607e5',
-    }
+    if destination_uuid:
+        destination_uuid.remove(destination_uuid[-1])
+
+    condition_node_detail['router']['default_category_uuid'] = condition_node_detail['router']['categories'][0]['uuid']
+    condition_node_detail['exits'][0]['uuid'] = condition_node_detail['router']['categories'][0]['exit_uuid']
 
     if save_name:
         condition_node_detail['router']['result_name'] = save_name
     else:
         for condition_text in condition_values:
-            categories_detail = {
-                'exit_uuid': 'e59fda75-21e1-4d77-83a7-7733cc721eff',
-                'name': '', 'uuid': '5348fd6e-ffd3-4f11-ad59-3aa6f985a51a'
+            cases_detail = {
+                'arguments': [], 'category_uuid': generate_uuid(),
+                'type': 'has_only_phrase', 'uuid': generate_uuid()
             }
 
-            cases_detail = {
-                'arguments': [], 'category_uuid': '7fa98857-490b-4f56-958b-0ba45b26f9d4',
-                'type': 'has_only_phrase', 'uuid': '6f5a56ce-265e-4986-9107-f48e15bf7c98'
+            categories_detail = {
+                'exit_uuid': generate_uuid(), 'name': '',
+                'uuid': cases_detail['category_uuid']
             }
+
+            exits_detail = {
+                'uuid': categories_detail['exit_uuid'],
+                'destination_uuid': generate_uuid()
+            }
+
+            destination_uuid.insert(0, exits_detail['destination_uuid'])
 
             if condition_text == 'Unticked Value' or condition_text == 'No':
                 case_detail = {
-                    'arguments': [], 'category_uuid': '7fa98857-490b-4f56-958b-0ba45b26f9d4',
-                    'type': 'has_only_phrase', 'uuid': '6f5a56ce-265e-4986-9107-f48e15bf7c98'
+                    'arguments': [], 'category_uuid': generate_uuid(),
+                    'type': 'has_only_phrase', 'uuid': generate_uuid()
                 }
 
                 categorie_detail = {
-                    'exit_uuid': 'e59fda75-21e1-4d77-83a7-7733cc721eff',
-                    'name': '', 'uuid': '5348fd6e-ffd3-4f11-ad59-3aa6f985a51a'
+                    'exit_uuid': generate_uuid(),
+                    'name': '', 'uuid': generate_uuid()
                 }
 
                 exit_detail = {
@@ -187,16 +161,16 @@ def get_condition_node_detail(row, condition_values, save_name):
                     'destination_uuid': '65355f1a-f702-48c3-a015-1774112607e5',
                 }
 
-                case_detail['arguments'].append(condition_text)
-                categorie_detail['name'] = condition_text
+                case_detail['arguments'].append(str(condition_text))
+                categorie_detail['name'] = str(condition_text)
 
                 condition_node_detail['router']['cases'].append(case_detail)
                 condition_node_detail['router']['categories'].append(categorie_detail)
                 condition_node_detail['exits'].append(exit_detail)
 
             if condition_text:
-                categories_detail['name'] = condition_text
-                cases_detail['arguments'].append(condition_text)
+                categories_detail['name'] = str(condition_text)
+                cases_detail['arguments'].append(str(condition_text))
 
                 condition_node_detail['router']['cases'].append(cases_detail)
                 condition_node_detail['router']['categories'].append(categories_detail)
@@ -243,24 +217,33 @@ def get_condition_values(row):
 def get_message_text_node_detail(row):
     global choices_column_numbers
     global choices
+    global destination_uuid
 
     choices = []
 
     message_text_node_detail = {
-        'uuid': '0500fc07-6f4e-4f04-8cb4-c39985d8a971',
+        'uuid': destination_uuid[-1] if destination_uuid else generate_uuid(),
         'actions': [], 'exits': [],
     }
+
+    if destination_uuid:
+        destination_uuid.remove(destination_uuid[-1])
 
     message_text_action_detail = {
         'attachments': [], 'text': get_sheet_cell_detail(row, text_column_number),
         'type': 'send_msg', 'quick_replies': [],
-        'uuid': '0500fc07-6f4e-4f04-8cb4-c39985d8a971'
+        'uuid': generate_uuid()
     }
 
     message_text_exist_detail = {
-        'uuid': '8874dfdb-31da-4880-83cc-a6b6a7ff6f04',
-        'destination_uuid': 'a117eea3-8f9e-4023-aacb-404360b88c25'
+        'uuid': generate_uuid(),
+        'destination_uuid': generate_uuid()
     }
+
+    if get_sheet_cell_detail(row+1, text_column_number) == 2:
+        message_text_exist_detail['destination_uuid'] = None
+
+    destination_uuid.insert(0, message_text_exist_detail['destination_uuid'])
 
     for choice in choices_column_numbers:
         choice_text = get_sheet_cell_detail(row, choice)
@@ -270,8 +253,6 @@ def get_message_text_node_detail(row):
 
     for choice_text in choices:
         message_text_action_detail['quick_replies'].append(choice_text)
-
-    # if choices and not get_sheet_cell_detail(row=row+1, column=2):
 
     message_text_node_detail['actions'].append(message_text_action_detail)
     message_text_node_detail['exits'].append(message_text_exist_detail)
@@ -339,7 +320,7 @@ def get_all_nodes_detail(flows_detail, sheet_name):
 
 def get_detail_in_flows(sheet_name):
     flows_detail = {
-        'name': f'{sheet_name}', 'uuid': 'd299b770-3cf9-4dcd-81da-4c0f04da2872',
+        'name': f'{sheet_name}', 'uuid': generate_uuid(),
         'spec_version': '13.1.0', 'language': 'base', 'type': 'messaging',
         'nodes': [], '_ui': None, 'revision': 0, 'expire_after_minutes': 60,
         'metadata': {'revision': 0}, 'localization': {}
@@ -354,9 +335,11 @@ def get_detail_in_flows(sheet_name):
 
 
 if __name__ == '__main__':
-    sheets = ['example_habit', 'example_characters', 'example_mark_as_completed',
-              'example_story2', 'example_story1', 'example_user_input', 'example_variables',
-              'example_tickbox_2', 'example_tickbox', 'example_long_xxxxxxxxxxxxxxxx']
+    # sheets = ['example_habit', 'example_characters', 'example_mark_as_completed',
+    #           'example_story2', 'example_story1', 'example_user_input', 'example_variables',
+    #           'example_tickbox_2', 'example_tickbox', 'example_long_xxxxxxxxxxxxxxxx']
+
+    sheets = ['example_story2']
 
     for sheet_name in sheets:
         complete_sheet_detail = {
