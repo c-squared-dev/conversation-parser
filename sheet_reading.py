@@ -12,6 +12,7 @@ from_column_number = None
 condition_column_number = None
 save_name_column_number = None
 text_column_number = None
+media_column_number = None
 condition_var_column_number = None
 choices_column_numbers = []
 
@@ -32,7 +33,7 @@ def get_maximum_columns():
 
 def read_sheet_detail(sheet_name):
     global sheet
-    compatible_file = openpyxl.load_workbook('C:\\Users\\Usman Ali\\Downloads\\compatible_example_chat_flows.xlsx')
+    compatible_file = openpyxl.load_workbook('C:\\Users\\Usman Ali\\Downloads\\ehmad_test_chat_flows.xlsx')
     sheet = compatible_file[sheet_name]
 
 
@@ -73,8 +74,8 @@ def get_last_node_detail(mark_as_completed, sheet_name):
 
 
 def get_required_column_numbers(sheet_name):
-    global type_column_number, from_column_number, condition_column_number, \
-        text_column_number, save_name_column_number, choices_column_numbers, condition_var_column_number
+    global type_column_number, from_column_number, condition_column_number, text_column_number, \
+        media_column_number, save_name_column_number, choices_column_numbers, condition_var_column_number
 
     choices_column_numbers = []
     condition_var_column_number = []
@@ -94,6 +95,8 @@ def get_required_column_numbers(sheet_name):
             condition_var_column_number = column
         elif first_row == 'message_text':
             text_column_number = column
+        elif first_row == 'media':
+            media_column_number = column
         elif first_row == 'save_name':
             save_name_column_number = column
         elif first_row == 'choice_1' or first_row == 'choice_2' or first_row == 'choice_3':
@@ -186,7 +189,7 @@ def get_condition_node_detail(row, condition_values, save_name):
             if get_sheet_cell_detail(row=row, column=condition_var_column_number):
                 condition_node_detail['router'].pop('wait', None)
                 condition_node_detail['router']['operand'] = get_sheet_cell_detail(row=row,
-                                                                               column=condition_var_column_number)
+                                                                                   column=condition_var_column_number)
 
     return condition_node_detail
 
@@ -215,7 +218,7 @@ def get_condition_values(row):
 
 
 def get_message_text_node_detail(row):
-    global choices_column_numbers
+    global choices_column_numbers, media_column_number
     global choices
     global destination_uuid
 
@@ -230,17 +233,21 @@ def get_message_text_node_detail(row):
         destination_uuid.remove(destination_uuid[-1])
 
     message_text_action_detail = {
-        'attachments': [], 'text': get_sheet_cell_detail(row, text_column_number),
+        'attachments': [],
+        'text': get_sheet_cell_detail(row, text_column_number),
         'type': 'send_msg', 'quick_replies': [],
         'uuid': generate_uuid()
     }
+
+    if get_sheet_cell_detail(row=row, column=media_column_number):
+        message_text_action_detail['attachments'].append('image:' + get_sheet_cell_detail(row=row, column=media_column_number))
 
     message_text_exist_detail = {
         'uuid': generate_uuid(),
         'destination_uuid': generate_uuid()
     }
 
-    if get_sheet_cell_detail(row+1, text_column_number) == 2:
+    if get_sheet_cell_detail(row + 1, text_column_number) == 2:
         message_text_exist_detail['destination_uuid'] = None
 
     destination_uuid.insert(0, message_text_exist_detail['destination_uuid'])
@@ -329,7 +336,7 @@ def get_detail_in_flows(sheet_name):
     if get_all_nodes_detail(flows_detail, sheet_name):
         flows_detail['nodes'].append(get_all_nodes_detail(flows_detail, sheet_name))
 
-    flows_detail['nodes'].append(get_last_node_detail(False, sheet_name))
+    # flows_detail['nodes'].append(get_last_node_detail(False, sheet_name))
 
     return flows_detail
 
@@ -339,7 +346,7 @@ if __name__ == '__main__':
     #           'example_story2', 'example_story1', 'example_user_input', 'example_variables',
     #           'example_tickbox_2', 'example_tickbox', 'example_long_xxxxxxxxxxxxxxxx']
 
-    sheets = ['example_story2']
+    sheets = ['example_story1']
 
     for sheet_name in sheets:
         complete_sheet_detail = {
