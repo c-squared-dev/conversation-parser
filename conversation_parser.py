@@ -7,6 +7,7 @@ import openpyxl
 class ReadSheetFromFile:
     destination_uuid = []
 
+    row_id_column_number = None
     type_column_number = None
     from_column_number = None
     condition_column_number = None
@@ -17,6 +18,8 @@ class ReadSheetFromFile:
     choices_column_numbers = []
 
     choices = []
+
+    node_uuid = {}
 
     checked_condition_columns = []
 
@@ -81,7 +84,9 @@ def get_required_column_numbers():
     for column in range(1, get_maximum_columns()):
         first_row = get_sheet_cell_detail(1, column)
 
-        if first_row == 'type':
+        if first_row == 'row_id':
+            sheet_reader.row_id_column_number = column
+        elif first_row == 'type':
             sheet_reader.type_column_number = column
         elif first_row == 'from':
             sheet_reader.from_column_number = column
@@ -117,7 +122,7 @@ def get_condition_node_detail(row, condition_values, save_name):
             'default_category_uuid': '',
             'wait': {'type': 'msg'}},
         'exits': [
-            {'uuid': 'e59fda75-21e1-4d77-83a7-7733cc721eff',
+            {'uuid': generate_uuid(),
              'destination_uuid': None}
         ],
     }
@@ -130,6 +135,8 @@ def get_condition_node_detail(row, condition_values, save_name):
 
     if save_name:
         condition_node_detail['router']['result_name'] = save_name
+        condition_node_detail['exits'][0]['destination_uuid'] = generate_uuid()
+        sheet_reader.destination_uuid.insert(0, condition_node_detail['exits'][0]['destination_uuid'])
     else:
         for condition_text in condition_values:
             cases_detail = {
@@ -186,6 +193,10 @@ def get_condition_node_detail(row, condition_values, save_name):
                 condition_node_detail['router']['categories'].append(categories_detail)
                 condition_node_detail['exits'].append(exits_detail)
 
+        if get_sheet_cell_detail(row=row + 1, column=sheet_reader.type_column_number) == 'go_to':
+            goto_row_id = get_sheet_cell_detail(row=row+1, column=sheet_reader.text_column_number)
+            condition_node_detail['exits'][-1]['destination_uuid'] = sheet_reader.node_uuid[f'{goto_row_id}']
+
         if sheet_reader.save_name_column_number:
             if get_sheet_cell_detail(row, sheet_reader.save_name_column_number):
                 condition_node_detail['router'].pop('wait', None)
@@ -228,6 +239,8 @@ def get_message_text_node_detail(row):
         'actions': [], 'exits': [],
     }
 
+    sheet_reader.node_uuid[f'{row-1}'] = message_text_node_detail['uuid']
+
     if sheet_reader.destination_uuid:
         sheet_reader.destination_uuid.remove(sheet_reader.destination_uuid[-1])
 
@@ -239,7 +252,7 @@ def get_message_text_node_detail(row):
         'uuid': generate_uuid()
     }
 
-    if get_sheet_cell_detail(row=row, column=sheet_reader.media_column_number):
+    if sheet_reader.media_column_number and get_sheet_cell_detail(row=row, column=sheet_reader.media_column_number):
         message_text_action_detail['attachments'].append('image:' + get_sheet_cell_detail(row=row, column=sheet_reader.media_column_number))
 
     message_text_exist_detail = {
@@ -247,7 +260,10 @@ def get_message_text_node_detail(row):
         'destination_uuid': generate_uuid()
     }
 
-    if get_sheet_cell_detail(row + 1, sheet_reader.text_column_number) == 2:
+    if get_sheet_cell_detail(row + 1, sheet_reader.type_column_number) == 'go_to':
+        message_text_exist_detail['destination_uuid'] = None
+
+    if not get_sheet_cell_detail(row + 1, sheet_reader.row_id_column_number):
         message_text_exist_detail['destination_uuid'] = None
 
     sheet_reader.destination_uuid.insert(0, message_text_exist_detail['destination_uuid'])
@@ -269,19 +285,24 @@ def get_message_text_node_detail(row):
 
 def get_save_name_node_detail(save_name_column_value, row):
     save_name_node_detail = {
-        'uuid': '46084334-4111-4866-897a-b189a3e2d51c',
+        'uuid': sheet_reader.destination_uuid[-1] if sheet_reader.destination_uuid else generate_uuid(),
         'actions': [
-            {'uuid': '8df481e6-c0a5-4ee5-916b-597163597039',
+            {'uuid': generate_uuid(),
              'type': 'set_contact_field',
              'field': {'key': f'{save_name_column_value}',
                        'name': f'{save_name_column_value}'},
              'value': f'@results.{save_name_column_value}'}
         ],
         'exits': [
-            {'uuid': 'ee6809e2-1336-49d0-913f-5d18ffd484da',
-             'destination_uuid': '1ea89c1e-aebd-4267-9fff-6d419a101d47'}
+            {'uuid': generate_uuid(),
+             'destination_uuid': generate_uuid()}
         ],
     }
+
+    sheet_reader.destination_uuid.insert(0, save_name_node_detail['exits'][0]['destination_uuid'])
+
+    if sheet_reader.destination_uuid:
+        sheet_reader.destination_uuid.remove(sheet_reader.destination_uuid[-1])
 
     if get_sheet_cell_detail(row, sheet_reader.type_column_number) == 'save_value':
         save_name_node_detail['actions'][0]['value'] = get_sheet_cell_detail(row, sheet_reader.text_column_number)
@@ -290,11 +311,12 @@ def get_save_name_node_detail(save_name_column_value, row):
 
 
 def get_all_nodes_detail(flows_detail):
-    checked_condition_columns = []
+    sheet_reader.checked_condition_columns = []
+    sheet_reader.destination_uuid = []
     get_required_column_numbers()
 
     for row in range(2, get_maximum_rows() + 1):
-        if not get_sheet_cell_detail(row, 2):
+        if not get_sheet_cell_detail(row, sheet_reader.row_id_column_number):
             break
 
         if get_sheet_cell_detail(row, sheet_reader.type_column_number) == 'mark_as_completed':
@@ -302,7 +324,7 @@ def get_all_nodes_detail(flows_detail):
         else:
             if get_sheet_cell_detail(row,
                                      sheet_reader.condition_column_number) and row not in sheet_reader.checked_condition_columns:
-                checked_condition_columns.append(row)
+                sheet_reader.checked_condition_columns.append(row)
                 flows_detail['nodes'].append(get_condition_node_detail(row, get_condition_values(row), None))
 
             if get_sheet_cell_detail(row, sheet_reader.text_column_number) and get_sheet_cell_detail(row,
@@ -313,15 +335,14 @@ def get_all_nodes_detail(flows_detail):
                 if sheet_reader.choices and get_sheet_cell_detail(row=row + 1, column=2) is None:
                     flows_detail['nodes'].append(get_condition_node_detail(row, sheet_reader.choices, None))
 
-            if sheet_reader.save_name_column_number:
-                if get_sheet_cell_detail(row, sheet_reader.save_name_column_number):
-                    save_name_column_value = get_sheet_cell_detail(row, sheet_reader.save_name_column_number)
+            if sheet_reader.save_name_column_number and get_sheet_cell_detail(row, sheet_reader.save_name_column_number):
+                save_name_column_value = get_sheet_cell_detail(row, sheet_reader.save_name_column_number)
 
-                    if not get_sheet_cell_detail(row, sheet_reader.type_column_number) == 'save_value':
-                        flows_detail['nodes'].append(get_condition_node_detail(row, [], save_name_column_value))
-                        flows_detail['nodes'].append(get_save_name_node_detail(save_name_column_value, row))
-                    else:
-                        flows_detail['nodes'].append(get_save_name_node_detail(save_name_column_value, row))
+                if not get_sheet_cell_detail(row, sheet_reader.type_column_number) == 'save_value':
+                    flows_detail['nodes'].append(get_condition_node_detail(row, [], save_name_column_value))
+                    flows_detail['nodes'].append(get_save_name_node_detail(save_name_column_value, row))
+                else:
+                    flows_detail['nodes'].append(get_save_name_node_detail(save_name_column_value, row))
 
 
 def get_detail_in_flows():
@@ -348,24 +369,23 @@ def get_detail_in_flows():
 
 
 if __name__ == '__main__':
-    # This algorithm works only for uuid of 'example_story1' sheet.
+    sheets = ['example_story1', 'example_media']
 
-    sheet_name = 'example_story1'
-    path = 'C:\\Users\\Usman Ali\\Downloads\\ehmad_test_chat_flows.xlsx'
-    # sheet_reader = ReadSheetFromFile('C:\\Users\\Usman Ali\\Downloads\\ehmad_test_chat_flows.xlsx', sheet_name)
-    sheet_reader = ReadSheetFromFile(path, sheet_name)
+    for sheet_name in sheets:
+        path = 'C:\\Users\\Usman Ali\\Downloads\\ehmad_test_chat_flows.xlsx'
+        sheet_reader = ReadSheetFromFile(path, sheet_name)
 
-    complete_sheet_detail = {
-        'campaigns': [],
-        'fields': [],
-        'flows': [],
-        'groups': [],
-        'site': 'https://rapidpro.idems.international',
-        'triggers': [],
-        'version': '13',
-    }
+        complete_sheet_detail = {
+            'campaigns': [],
+            'fields': [],
+            'flows': [],
+            'groups': [],
+            'site': 'https://rapidpro.idems.international',
+            'triggers': [],
+            'version': '13',
+        }
 
-    complete_sheet_detail['flows'].append(get_detail_in_flows())
+        complete_sheet_detail['flows'].append(get_detail_in_flows())
 
-    with open(f'{sheet_name}.json', 'w') as sheet_detail:
-        json.dump(complete_sheet_detail, sheet_detail)
+        with open(f'{sheet_name}.json', 'w') as sheet_detail:
+            json.dump(complete_sheet_detail, sheet_detail)
