@@ -64,6 +64,7 @@ class RapidProParser:
     def run(self):
         all_nodes = []
         for key, node in nodes_map.items():
+
             node.parse()
             all_nodes.append(node)
 
@@ -98,7 +99,7 @@ class RapidProParser:
                 save_name_node.parse()
                 all_nodes.append(save_name_node)
 
-                save_name_node.add_exit(RapidProExit(save_name_conditional_node.uuid))
+                save_name_conditional_node.add_exit(RapidProExit(save_name_node.uuid))
 
             if any([node.choice_1, node.choice_2, node.choice_3]):
                 conditional_node = ConditionalRapidProNode(
@@ -155,7 +156,7 @@ if __name__ == '__main__':
     sheets = ['example_story1', 'example_media']
 
     for sheet_name in sheets:
-        path = '/Users/ehmadzubair/Documents/cogent-labs/software-projects/conversation-parser-project/test-spreadsheet - example_user_input.csv'
+        path = '/Users/ehmadzubair/Documents/cogent-labs/software-projects/conversation-parser-project/test-spreadsheet - example_story1.csv'
         sheet_reader = ReadSheetFromFile(path)
         sheet_reader.read_csv()
 
