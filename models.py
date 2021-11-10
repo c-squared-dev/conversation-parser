@@ -1,4 +1,4 @@
-from constants import excel_to_json_type_map
+from constants import excel_to_json_type_map, nodes_map
 from utils import generate_uuid, find_node
 
 
@@ -18,6 +18,25 @@ class RapidProNodeAction:
             "type": excel_to_json_type_map[self.type],
             "quick_replies": self.quick_replies,
             "uuid": self.uuid
+        }
+
+
+class RapidProSaveNameNodeAction:
+
+    def __init__(self, type, save_name):
+        self.type = type
+        self.uuid = generate_uuid()
+        self.save_name = save_name
+
+    def render(self):
+        return {
+            "type": excel_to_json_type_map[self.type],
+            "uuid": self.uuid,
+            'field': {
+                'key': self.save_name,
+                'name': self.save_name,
+            },
+            'value': f'@results.{self.save_name}'
         }
 
 
@@ -87,8 +106,25 @@ class RapidProRouter:
         }
 
 
+class SaveNameRapidProRouter(RapidProRouter):
+    def __init__(self, save_name, **kwargs):
+        super().__init__(**kwargs)
+        self.result_name = save_name
+
+    def render(self):
+        return {
+            'type': self.type,
+            'cases': [case.render() for case in self.cases],
+            'categories': [category.render() for category in self.categories],
+            'operand': self.operand,
+            'default_category_uuid': self.default_category_uuid,
+            'wait': self.wait,
+            'result_name': self.result_name
+        }
+
+
 class RapidProNode:
-    def __init__(self, row_id, type, _from, condition, message_text, media, choice_1, choice_2):
+    def __init__(self, row_id, type, _from, condition, message_text, media, choice_1, choice_2, choice_3, save_name):
 
         # Excel Sheet
         self.uuid = generate_uuid()
@@ -100,13 +136,15 @@ class RapidProNode:
         self.media = media
         self.choice_1 = choice_1
         self.choice_2 = choice_2
+        self.choice_3 = choice_3
+        self.save_name = save_name
 
         # Use for RapidPro
         self.actions = []
         self.exits = []
 
     def _get_quick_replies(self):
-        return [choice for choice in [self.choice_1, self.choice_2] if choice]
+        return [choice for choice in [self.choice_1, self.choice_2, self.choice_3] if choice]
 
     def populate_actions(self):
         self.actions.append(
@@ -118,27 +156,26 @@ class RapidProNode:
             )
         )
 
-    def _get_destination_nodes(self, nodes_map):
+    def _get_destination_nodes(self):
         return [node for _, node in nodes_map.items() if node._from == self.row_id]
 
     def add_exit(self, rapidpro_exit):
         self.exits.append(rapidpro_exit)
 
-    def populate_exits(self, nodes_map):
-        if self.choice_1 or self.choice_2:
+    def populate_exits(self):
+        if any([self.choice_1, self.choice_2, self.choice_3]):
             # populate later with patch
             return
 
-        destination_nodes = self._get_destination_nodes(nodes_map=nodes_map)
+        destination_nodes = self._get_destination_nodes()
         if destination_nodes:
             self.exits = [RapidProExit(destination_uuid=node.uuid) for node in destination_nodes]
         else:
             self.exits = [RapidProExit(destination_uuid=None)]
 
-    def parse(self, **kwargs):
-        nodes_map = kwargs.get('nodes_map')
+    def parse(self):
         self.populate_actions()
-        self.populate_exits(nodes_map=nodes_map)
+        self.populate_exits()
 
     def render(self):
         return_dict = {
@@ -157,24 +194,24 @@ class ConditionalRapidProNode(RapidProNode):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.used_conditions = set([node.condition for _, node in nodes_map.items() if node.condition])
+        # Update default category UUID here
 
+    def _populate_router(self):
         default_category = RapidProCategory.default_category(exit_uuid=None)
         self.router = RapidProRouter('@input.text', default_category_uuid=None)
 
         self.router.categories.append(default_category)
         self.router.default_category_uuid = default_category.uuid
 
-        self.used_conditions = set([node.condition for _, node in nodes_map.items() if node.condition])
-        # Update default category UUID here
-
     def _populate_cases(self):
-        for choice in [self.choice_1, self.choice_2]:
+        for choice in [self.choice_1, self.choice_2, self.choice_3]:
             if choice and choice in self.used_conditions:
                 # category_uuid will be populated from _populate_categories
                 self.router.cases.append(RapidProCase(argument=choice, category_uuid=None))
 
     def _populate_categories(self):
-        for choice in [self.choice_1, self.choice_2]:
+        for choice in [self.choice_1, self.choice_2, self.choice_3]:
             if choice and choice in self.used_conditions:
                 # Populate exit_uuid
                 category = RapidProCategory(exit_uuid=None, name=choice)
@@ -198,7 +235,7 @@ class ConditionalRapidProNode(RapidProNode):
     def populate_actions(self):
         self.actions = []
 
-    def populate_exits(self, nodes_map):
+    def populate_exits(self):
         for category in self.router.categories:
             if category.name == 'All Responses':
                 destination_uuid = None
@@ -216,6 +253,7 @@ class ConditionalRapidProNode(RapidProNode):
             self.exits.append(exit)
 
     def parse(self):
+        self._populate_router()
         self._populate_cases()
         self._populate_categories()
         super().parse()
@@ -229,6 +267,40 @@ class ConditionalRapidProNode(RapidProNode):
         }
 
 
+class SaveNameConditionalRapidProNode(ConditionalRapidProNode):
+
+    def _populate_router(self):
+        default_category = RapidProCategory.default_category(exit_uuid=None)
+        self.router = SaveNameRapidProRouter(operand='@input.text', default_category_uuid=None, save_name=self.save_name)
+
+        self.router.categories.append(default_category)
+        self.router.default_category_uuid = default_category.uuid
+
+
+    def _populate_categories(self):
+        pass
+
+
+    def _populate_cases(self):
+        pass
+
+
+
 class RapidProGotoNode(RapidProNode):
-    def get_destination_node(self, nodes_map):
+    def get_destination_node(self):
         return nodes_map[self.message_text]
+
+
+class SaveNameNode(RapidProNode):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+
+    def populate_actions(self):
+        self.actions.append(
+            RapidProSaveNameNodeAction(
+                type=self.type,
+                save_name=self.save_name
+            )
+        )
+

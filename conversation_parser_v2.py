@@ -5,12 +5,12 @@ from collections import defaultdict
 
 import openpyxl
 
-from models import RapidProGotoNode, RapidProNode, ConditionalRapidProNode, RapidProExit
+from constants import nodes_map
+from models import RapidProGotoNode, RapidProNode, ConditionalRapidProNode, RapidProExit, \
+    SaveNameConditionalRapidProNode, SaveNameNode
 from utils import generate_uuid
 
 debug = True
-
-nodes_map = defaultdict()
 
 
 class ReadSheetFromFile:
@@ -30,9 +30,11 @@ class ReadSheetFromFile:
                         row['from'],
                         row['condition'],
                         row['message_text'],
-                        row['media'],
+                        row.get('media'),
                         row['choice_1'],
-                        row['choice_2']
+                        row['choice_2'],
+                        row['choice_3'],
+                        row.get('save_name'),
                     )
                     nodes_map[row['row_id']] = goto_node
                 else:
@@ -42,9 +44,11 @@ class ReadSheetFromFile:
                         row['from'],
                         row['condition'],
                         row['message_text'],
-                        row['media'],
+                        row.get('media'),
                         row['choice_1'],
-                        row['choice_2']
+                        row['choice_2'],
+                        row['choice_3'],
+                        row.get('save_name'),
                     )
                     nodes_map[row['row_id']] = rapidpro_node
                 line_count += 1
@@ -55,14 +59,48 @@ class ReadSheetFromFile:
 class RapidProParser:
     def populate_base_nodes(self):
         for key, node in nodes_map.items():
-            node.parse(nodes_map=nodes_map)
+            node.parse()
 
     def run(self):
         all_nodes = []
         for key, node in nodes_map.items():
-            node.parse(nodes_map=nodes_map)
+            node.parse()
             all_nodes.append(node)
-            if node.choice_1 or node.choice_2:
+
+
+            if node.save_name:
+                save_name_conditional_node = SaveNameConditionalRapidProNode(
+                    row_id=node.row_id,
+                    type=node.type,
+                    _from=node._from,
+                    condition=node.condition,
+                    message_text=node.message_text,
+                    media=node.media,
+                    choice_1=node.choice_1,
+                    choice_2=node.choice_2,
+                    choice_3=node.choice_3,
+                    save_name=node.save_name,
+                )
+                save_name_conditional_node.parse()
+                all_nodes.append(save_name_conditional_node)
+
+                save_name_node = SaveNameNode(row_id=node.row_id,
+                                              type=node.type,
+                                              _from=node._from,
+                                              condition=node.condition,
+                                              message_text=node.message_text,
+                                              media=node.media,
+                                              choice_1=node.choice_1,
+                                              choice_2=node.choice_2,
+                                              choice_3=node.choice_3,
+                                              save_name=node.save_name, )
+
+                save_name_node.parse()
+                all_nodes.append(save_name_node)
+
+                save_name_node.add_exit(RapidProExit(save_name_conditional_node.uuid))
+
+            if any([node.choice_1, node.choice_2, node.choice_3]):
                 conditional_node = ConditionalRapidProNode(
                     row_id=node.row_id,
                     type=node.type,
@@ -71,7 +109,9 @@ class RapidProParser:
                     message_text=node.message_text,
                     media=node.media,
                     choice_1=node.choice_1,
-                    choice_2=node.choice_2
+                    choice_2=node.choice_2,
+                    choice_3=node.choice_3,
+                    save_name=node.save_name,
                 )
                 conditional_node.parse()
                 all_nodes.append(conditional_node)
@@ -107,12 +147,15 @@ class RapidProParser:
 
         ))
 
+        print('=================== DEBUG ===============')
+        print([node.__class__ for node in all_nodes if node.type != 'go_to'])
+
 
 if __name__ == '__main__':
     sheets = ['example_story1', 'example_media']
 
     for sheet_name in sheets:
-        path = '/Users/ehmadzubair/Documents/cogent-labs/software-projects/conversation-parser-project/conversation-parser/test-spreadsheet - example_media.csv'
+        path = '/Users/ehmadzubair/Documents/cogent-labs/software-projects/conversation-parser-project/test-spreadsheet - example_user_input.csv'
         sheet_reader = ReadSheetFromFile(path)
         sheet_reader.read_csv()
 
