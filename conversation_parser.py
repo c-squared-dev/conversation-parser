@@ -372,7 +372,7 @@ if __name__ == '__main__':
     sheets = ['example_story1', 'example_media']
 
     for sheet_name in sheets:
-        path = 'C:\\Users\\Usman Ali\\Downloads\\ehmad_test_chat_flows.xlsx'
+        path = '/Users/ehmadzubair/Documents/cogent-labs/software-projects/conversation-parser-project/ehmad_test_chat_flows.xlsx'
         sheet_reader = ReadSheetFromFile(path, sheet_name)
 
         complete_sheet_detail = {
