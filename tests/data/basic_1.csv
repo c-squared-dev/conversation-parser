@@ -1,0 +1,3 @@
+black,row_id,type,from,condition,message_text,media,choice_1,choice_2
+,1,send_message,start,,This is the media example flow. ,,,
+,2,send_message,1,,This message has an attached image.,plh_images/characters/guide1/neutral.svg,,
