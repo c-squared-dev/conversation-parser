@@ -159,13 +159,11 @@ class RapidProNode:
     def patch_first_exit(self, destination_uuid):
         self.exits[0].destination_uuid = destination_uuid
 
-
     def update_or_create_first_exit(self, destination_uuid):
         if self.exits:
             self.exits[0].destination_uuid = destination_uuid
         else:
             self.exits = [RapidProExit(destination_uuid=destination_uuid)]
-
 
     def _get_destination_nodes(self):
         return [node for _, node in nodes_map.items() if node._from == self.row_id]
@@ -291,8 +289,6 @@ class SaveNameConditionalRapidProNode(ConditionalRapidProNode):
         self.router.categories.append(default_category)
         self.router.default_category_uuid = default_category.uuid
 
-
-
     def _populate_categories(self):
         pass
 
@@ -352,7 +348,6 @@ class SaveNameCollection(RapidProNode):
         self.save_name_conditional_node.parse()
         self.base_node.update_or_create_first_exit(destination_uuid=self.save_name_conditional_node.uuid)
 
-
         self.save_name_node = SaveNameNode(
             row_id=self.row_id,
             type=self.type,
@@ -387,4 +382,3 @@ class SaveNameCollection(RapidProNode):
     def get_nodes(self):
         return [node for node in
                 [self.base_node, self.save_name_conditional_node, self.save_name_node, self.conditional_node] if node]
-
