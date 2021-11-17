@@ -156,10 +156,22 @@ class RapidProNode:
             )
         )
 
+    def patch_first_exit(self, destination_uuid):
+        self.exits[0].destination_uuid = destination_uuid
+
+    def update_or_create_first_exit(self, destination_uuid):
+        if self.exits:
+            self.exits[0].destination_uuid = destination_uuid
+        else:
+            self.exits = [RapidProExit(destination_uuid=destination_uuid)]
+
     def _get_destination_nodes(self):
         return [node for _, node in nodes_map.items() if node._from == self.row_id]
 
     def add_exit(self, rapidpro_exit):
+        if type(self) in [ConditionalRapidProNode, SaveNameConditionalRapidProNode]:
+            print('ConditionalRapidProNode adds its exits using populate_exits()')
+            return
         self.exits.append(rapidpro_exit)
 
     def populate_exits(self):
@@ -271,19 +283,17 @@ class SaveNameConditionalRapidProNode(ConditionalRapidProNode):
 
     def _populate_router(self):
         default_category = RapidProCategory.default_category(exit_uuid=None)
-        self.router = SaveNameRapidProRouter(operand='@input.text', default_category_uuid=None, save_name=self.save_name)
+        self.router = SaveNameRapidProRouter(operand='@input.text', default_category_uuid=None,
+                                             save_name=self.save_name)
 
         self.router.categories.append(default_category)
         self.router.default_category_uuid = default_category.uuid
 
-
     def _populate_categories(self):
         pass
 
-
     def _populate_cases(self):
         pass
-
 
 
 class RapidProGotoNode(RapidProNode):
@@ -295,7 +305,6 @@ class SaveNameNode(RapidProNode):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-
     def populate_actions(self):
         self.actions.append(
             RapidProSaveNameNodeAction(
@@ -304,3 +313,72 @@ class SaveNameNode(RapidProNode):
             )
         )
 
+
+class SaveNameCollection(RapidProNode):
+    def __init__(self, base_node, **kwargs):
+        super().__init__(**kwargs)
+        self.base_node = base_node
+        self.save_name = self.save_name
+
+        self.save_name_conditional_node = None
+        self.save_name_node = None
+        self.conditional_node = None
+
+    def add_collection_exit(self, destination_uuid):
+        if self.conditional_node:
+            return
+        elif self.save_name_node:
+            self.save_name_node.exits = [RapidProExit(destination_uuid=destination_uuid)]
+        else:
+            print('Warning!, either conditional_node or save_name_node has to be non-null')
+
+    def parse(self):
+        self.save_name_conditional_node = SaveNameConditionalRapidProNode(
+            row_id=self.row_id,
+            type=self.type,
+            _from=self._from,
+            condition=self.condition,
+            message_text=self.message_text,
+            media=self.media,
+            choice_1=self.choice_1,
+            choice_2=self.choice_2,
+            choice_3=self.choice_3,
+            save_name=self.save_name,
+        )
+        self.save_name_conditional_node.parse()
+        self.base_node.update_or_create_first_exit(destination_uuid=self.save_name_conditional_node.uuid)
+
+        self.save_name_node = SaveNameNode(
+            row_id=self.row_id,
+            type=self.type,
+            _from=self._from,
+            condition=self.condition,
+            message_text=self.message_text,
+            media=self.media,
+            choice_1=self.choice_1,
+            choice_2=self.choice_2,
+            choice_3=self.choice_3,
+            save_name=self.save_name, )
+
+        self.save_name_node.parse()
+        self.save_name_conditional_node.patch_first_exit(self.save_name_node.uuid)
+
+        if any([self.choice_1, self.choice_2, self.choice_3]):
+            self.conditional_node = ConditionalRapidProNode(
+                row_id=self.row_id,
+                type=self.type,
+                _from=self._from,
+                condition=self.condition,
+                message_text=self.message_text,
+                media=self.media,
+                choice_1=self.choice_1,
+                choice_2=self.choice_2,
+                choice_3=self.choice_3,
+                save_name=self.save_name,
+            )
+            self.conditional_node.parse()
+            self.save_name_node.add_exit(RapidProExit(destination_uuid=self.conditional_node.uuid))
+
+    def get_nodes(self):
+        return [node for node in
+                [self.base_node, self.save_name_conditional_node, self.save_name_node, self.conditional_node] if node]
